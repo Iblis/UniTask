@@ -1,6 +1,6 @@
 UniTask
 ===
-[![GitHub Actions](https://github.com/Cysharp/UniTask/workflows/Build-Debug/badge.svg)](https://github.com/Cysharp/UniTask/actions) [![Releases](https://img.shields.io/github/release/Cysharp/UniTask.svg)](https://github.com/Cysharp/UniTask/releases)
+[![GitHub Actions](https://github.com/Cysharp/UniTask/workflows/Build-Debug/badge.svg)](https://github.com/Cysharp/UniTask/actions) [![Releases](https://img.shields.io/github/release/Cysharp/UniTask.svg)](https://github.com/Cysharp/UniTask/releases) [![Readme_CN](https://img.shields.io/badge/UniTask-%E4%B8%AD%E6%96%87%E6%96%87%E6%A1%A3-red)](https://github.com/Cysharp/UniTask/blob/master/README_CN.md)
 
 Provides an efficient allocation free async/await integration for Unity.
 
@@ -86,8 +86,8 @@ async UniTask<string> DemoAsync()
     await UniTask.Yield();
     await UniTask.NextFrame();
 
-    // replacement of WaitForEndOfFrame(same as UniTask.Yield(PlayerLoopTiming.LastPostLateUpdate))
-    await UniTask.WaitForEndOfFrame();
+    // replacement of WaitForEndOfFrame(requires MonoBehaviour(CoroutineRunner))
+    await UniTask.WaitForEndOfFrame(this); // this is MonoBehaviour
 
     // replacement of yield return new WaitForFixedUpdate(same as UniTask.Yield(PlayerLoopTiming.FixedUpdate))
     await UniTask.WaitForFixedUpdate();
@@ -496,9 +496,9 @@ public enum PlayerLoopTiming
 
 It indicates when to run, you can check [PlayerLoopList.md](https://gist.github.com/neuecc/bc3a1cfd4d74501ad057e49efcd7bdae) to Unity's default playerloop and injected UniTask's custom loop.
 
-`PlayerLoopTiming.Update` is similar to `yield return null` in a coroutine, but it is called before Update(Update and uGUI events(button.onClick, etc...) are called on `ScriptRunBehaviourUpdate`, yield return null is called on `ScriptRunDelayedDynamicFrameRate`). `PlayerLoopTiming.FixedUpdate` is similar to `WaitForFixedUpdate`, `PlayerLoopTiming.LastPostLateUpdate` is similar to `WaitForEndOfFrame` in coroutine.
+`PlayerLoopTiming.Update` is similar to `yield return null` in a coroutine, but it is called before Update(Update and uGUI events(button.onClick, etc...) are called on `ScriptRunBehaviourUpdate`, yield return null is called on `ScriptRunDelayedDynamicFrameRate`). `PlayerLoopTiming.FixedUpdate` is similar to `WaitForFixedUpdate`.
 
-> `await UniTask.WaitForEndOfFrame()` is not equivalent to coroutine's `yield return new WaitForEndOfFrame()`. Coroutine's WaitForEndOfFrame seems to run after the PlayerLoop is done. Some methods that require coroutine's end of frame(`ScreenCapture.CaptureScreenshotAsTexture`, `CommandBuffer`, etc) do not work correctly when replaced with async/await. In these cases, use a coroutine instead.
+> `PlayerLoopTiming.LastPostLateUpdate` is not equivalent to coroutine's `yield return new WaitForEndOfFrame()`. Coroutine's WaitForEndOfFrame seems to run after the PlayerLoop is done. Some methods that require coroutine's end of frame(`Texture2D.ReadPixels`, `ScreenCapture.CaptureScreenshotAsTexture`, `CommandBuffer`, etc) do not work correctly when replaced with async/await. In these cases, pass MonoBehaviour(coroutine runnner) to `UniTask.WaitForEndOfFrame`. For example, `await UniTask.WaitForEndOfFrame(this);` is lightweight allocation free alternative of `yield return new WaitForEndOfFrame()`.
 
 `yield return null` and `UniTask.Yield` are similar but different. `yield return null` always returns next frame but `UniTask.Yield` returns next called. That is, call `UniTask.Yield(PlayerLoopTiming.Update)` on `PreUpdate`, it returns same frame. `UniTask.NextFrame()` guarantees return next frame, you can expect this to behave exactly the same as `yield return null`.
 
@@ -947,9 +947,9 @@ UniTask's own unit tests are written using Unity Test Runner and [Cysharp/Runtim
 
 ThreadPool limitation
 ---
-Most UniTask methods run on a single thread (PlayerLoop), with only `UniTask.Run` and `UniTask.SwitchToThreadPool` running on a thread pool. If you use a thread pool, it won't work with WebGL and so on.
+Most UniTask methods run on a single thread (PlayerLoop), with only `UniTask.Run`(`Task.Run` equivalent) and `UniTask.SwitchToThreadPool` running on a thread pool. If you use a thread pool, it won't work with WebGL and so on.
 
-`UniTask.Run` will be deprecated in the future (marked with an Obsolete) and only `RunOnThreadPool` will be used. If you use `UniTask.Run`, consider whether you can use `UniTask.Create` or `UniTask.Void`.
+`UniTask.Run` is now deprecated. You can use `UniTask.RunOnThreadPool` instead. And also consider whether you can use `UniTask.Create` or `UniTask.Void`.
 
 IEnumerator.ToUniTask limitation
 ---
@@ -1004,7 +1004,7 @@ Use UniTask type.
 | `IAsyncDisposable` | `IUniTaskAsyncDisposable` |
 | `Task.Delay` | `UniTask.Delay` |
 | `Task.Yield` | `UniTask.Yield` |
-| `Task.Run` | `UniTask.Run` |
+| `Task.Run` | `UniTask.RunOnThreadPool` |
 | `Task.WhenAll` | `UniTask.WhenAll` |
 | `Task.WhenAny` | `UniTask.WhenAny` |
 | `Task.CompletedTask` | `UniTask.CompletedTask` |
@@ -1088,7 +1088,7 @@ For .NET Core, use NuGet.
 
 UniTask of .NET Core version is a subset of Unity UniTask with PlayerLoop dependent methods removed.
 
-It runs at higher performance than the standard Task/ValueTask, but you should be careful to ignore the ExecutionContext/SynchronizationContext when using it. `AysncLocal` also does not work because it ignores ExecutionContext.
+It runs at higher performance than the standard Task/ValueTask, but you should be careful to ignore the ExecutionContext/SynchronizationContext when using it. `AsyncLocal` also does not work because it ignores ExecutionContext.
 
 If you use UniTask internally, but provide ValueTask as an external API, you can write it like the following(Inspired by [PooledAwait](https://github.com/mgravell/PooledAwait)).
 
